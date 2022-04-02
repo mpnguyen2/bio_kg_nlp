@@ -1,8 +1,8 @@
 TASK=wikidata 
-PROMPT_PATH=BioLAMA/data/${TASK}/prompts/manual.jsonl
-TEST_PATH=BioLAMA/data/${TASK}/triples_processed/*/testcopy.jsonl
+PROMPT_PATH=BioLAMA1/data/${TASK}/prompts/manual.jsonl
+TEST_PATH=BioLAMA1/data/${TASK}/triples_processed/*/testcopy.jsonl
 
-python3 BioLAMA/BioLAMA/run_manual.py \
+python3 BioLAMA1/BioLAMA/run_manual.py \
     --prompt_path ${PROMPT_PATH} \
     --test_path "${TEST_PATH}" \
     --init_method confidence \
