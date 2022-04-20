@@ -10,7 +10,7 @@ from pymetamap import MetaMap
 from sqlitedict import SqliteDict
 from utils import create_dir_if_not_exist
 
-TEXT2GRAPH = pickle.loads(open(UMLS_TEXT2GRAPH_FILE, 'rb').read().replace(b'\r\n', b'\n'))
+TEXT2GRAPH = {} #pickle.loads(open(UMLS_TEXT2GRAPH_FILE, 'rb').read().replace(b'\r\n', b'\n'))
 
 # Main Functions
 def umls_search_concepts(sents, filtered_types = MM_TYPES):
@@ -18,7 +18,7 @@ def umls_search_concepts(sents, filtered_types = MM_TYPES):
     search_results, cache_used, api_called = [], 0, 0
     sqlitedict = SqliteDict(UMLS_CONCEPTS_SQLITE, autocommit=True)
     for sent_idx, sent in enumerate(sents):
-        if sent in sqlitedict:
+        if False and sent in sqlitedict:
             # Use cache
             cache_used += 1
             raw_concepts = sqlitedict[sent]
@@ -69,6 +69,7 @@ def umls_search_concepts(sents, filtered_types = MM_TYPES):
 
 def umls_extract_network(sent):
     g_info = TEXT2GRAPH[sent]
+    # Nodes is a list of CUID
     nodes, edges = list(set(g_info['nodes'])), list(set(g_info['edges']))
 
     # Build DGL graph
