@@ -90,6 +90,7 @@ def train(configs):
     return {'all': best_dev_score, 'mention': best_dev_m_score, 'relation': best_dev_rel_score}
 
 if __name__ == "__main__":
+    os.environ["TOKENIZERS_PARALLELISM"] = "false"
     # Parse argument
     parser = ArgumentParser()
     parser.add_argument('-c', '--config_name', default='basic')
