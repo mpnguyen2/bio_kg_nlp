@@ -138,6 +138,7 @@ class KnowledgeEnhancerModule(nn.Module):
                                       num_bases=configs['ekg_gnn_num_bases'],
                                       num_hidden_layers=configs['ekg_gnn_hidden_layers'],
                                       dropout=configs['ekg_gnn_dropout'], use_self_loop=True)
+        self.ekg_gnn_model = self.ekg_gnn_model.float()
         self.ekg_out_linear = nn.Linear(UMLS_EMBS_SIZE, configs['span_emb_size'])
         self.relu = nn.ReLU()
 
@@ -173,7 +174,7 @@ class KnowledgeEnhancerModule(nn.Module):
         ekg_graph, nodes = umls_extract_network(text)
         ekg_concepts = umls_search_concepts([text])[0][0]['concepts']
         ekg_graph = ekg_graph.to(self.device)
-        initial_node_embs = torch.tensor([self.cuid2embs[n] for n in nodes]).to(self.device)
+        initial_node_embs = torch.tensor(np.array([self.cuid2embs[n] for n in nodes], dtype=np.float), dtype=torch.float).to(self.device)
         ekg_in_h = {NODE: initial_node_embs}
         ekg_out_h = self.ekg_gnn_model(ekg_graph, ekg_in_h)[NODE]
         ekg_out_h = self.relu(self.ekg_out_linear(ekg_out_h))
