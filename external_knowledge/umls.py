@@ -67,7 +67,7 @@ def umls_search_concepts(sents, filtered_types = MM_TYPES):
     sqlitedict.close()
     return search_results, {'cache_used': cache_used, 'api_called': api_called}
 
-def umls_extract_network(sent):
+def umls_extract_network(sent, common_embs={}):
     g_info = TEXT2GRAPH[sent]
     # Nodes is a list of CUID
     nodes, edges = list(set(g_info['nodes'])), list(set(g_info['edges']))
@@ -78,6 +78,8 @@ def umls_extract_network(sent):
     # Process edges
     edgetype2tensor1, edgetype2tensor2, edge_types = {}, {}, set()
     for n1, edge_type, n2 in edges:
+        if n1 in common_embs and n2 in common_embs:
+            continue
         node1_index = nodes.index(n1)
         node2_index = nodes.index(n2)
         if not edge_type in edgetype2tensor1: edgetype2tensor1[edge_type] = []

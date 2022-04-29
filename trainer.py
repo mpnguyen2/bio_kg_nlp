@@ -21,7 +21,7 @@ from argparse import ArgumentParser
 # Main Functions
 def train(configs):
     tokenizer = AutoTokenizer.from_pretrained(configs['transformer'])
-    train, dev = load_data(configs['dataset'], configs['split_nb'], tokenizer)
+    train, dev = load_data(configs['dataset'], configs['split_nb'], tokenizer, configs['max_train'], configs['max_dev'])
     model = JointModel(configs)
     print('Train Size = {} | Dev Size = {}'.format(len(train), len(dev)))
     print('Initialize a new model | {} parameters'.format(get_n_params(model)))
@@ -96,9 +96,11 @@ if __name__ == "__main__":
     parser.add_argument('-c', '--config_name', default='basic')
     parser.add_argument('-d', '--dataset', default=BIORELEX, choices=DATASETS)
     parser.add_argument('-s', '--split_nb', default=0) # Only affect ADE dataset
+    parser.add_argument('--max_train', default=0) # Number of maximum training examples allowed
+    parser.add_argument('--max_dev', default=0) # Number of maximum dev examples allowed
     args = parser.parse_args()
     args.split_nb = int(args.split_nb)
 
     # Start training
-    configs = prepare_configs(args.config_name, args.dataset, args.split_nb)
+    configs = prepare_configs(args.config_name, args.dataset, args.split_nb, args.max_train, args.max_dev)
     train(configs)

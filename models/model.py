@@ -8,7 +8,7 @@ from constants import *
 from models.base import *
 from models.encoder import *
 from models.helpers import *
-from models.external_knowledge import *
+from models.general_knowledge import *
 
 THRESHOLD = 0.50
 OUTPUT_FIELDS = ['starts', 'ends', 'entity_labels', 'relation_labels']
@@ -134,6 +134,8 @@ class JointModel(BaseModel):
     def __init__(self, configs):
         BaseModel.__init__(self, configs)
         self.configs = configs
+        with open(COMMON_EMBS_FILE, 'rb') as f:
+            self.common_embs = pickle.load(f)
         self.nb_entity_types = len(configs['entity_types'])
         self.nb_relation_types = len(configs['relation_types'])
         self.in_ned_pretraining = False
@@ -158,7 +160,7 @@ class JointModel(BaseModel):
 
         # Knowledge-Enhancer Module (if enabled)
         if self.use_external_knowledge:
-            self.knowledge_enhancer = KnowledgeEnhancerModule(configs)
+            self.knowledge_enhancer = KnowledgeEnhancerModule(configs, self.common_embs)
             self.knowledge_enhancer.device = self.device
             self.knowledge_enhancer.linker.device = self.device
 

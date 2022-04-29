@@ -1,4 +1,5 @@
 from argparse import ArgumentParser
+import random
 import pandas as pd
 import numpy as np
 import csv
@@ -61,18 +62,18 @@ def generate_txt():
 
 def generate_relation_dict():
     abbrev = {}
-    with open(SRDEF, 'r') as r_def_f:
-        for line in r_def_f:
+    with open(SRDEF, 'r') as f:
+        for line in f:
             fields = line.split("|")
             abbrev[fields[2]] = fields[8]
     d = {}
-    with open('resources/SRSTRE2', 'r') as r_f:
-        for line in r_f:
+    with open('resources/SRSTRE2', 'r') as f:
+        for line in f:
             fields = line.split("|")
             d[(abbrev[fields[0]], abbrev[fields[2]])] = abbrev[fields[1]]
     
-    with open('resources/relation.pickle', 'wb') as w_f:
-        pickle.dump(d, w_f, protocol=pickle.HIGHEST_PROTOCOL)
+    with open('resources/relation.pickle', 'wb') as f:
+        pickle.dump(d, f, protocol=pickle.HIGHEST_PROTOCOL)
 
 def get(text, text2graph, relation_dict, embeddings=None):
     if text in text2graph:
@@ -111,31 +112,38 @@ def get(text, text2graph, relation_dict, embeddings=None):
     
 def get_multiple_texts(texts, relation_dict, embeddings=None):
     # Load relation dictionary
-    with open('resources/relation.pickle', 'rb') as rel_dict_f:
-        relation_dict = pickle.load(rel_dict_f)
+    with open('resources/relation.pickle', 'rb') as f:
+        relation_dict = pickle.load(f)
     text2graph = {}
     # get each text in array of texts if not saved before
     for text in tqdm.tqdm(texts):
         get(text, text2graph, relation_dict, embeddings)
     # Save dictionary to text2graph.pkl
-    with open('resources/text2graph.pkl', 'wb') as w_f:
-        pickle.dump(text2graph, w_f, protocol=pickle.HIGHEST_PROTOCOL)
+    with open('resources/text2graph.pkl', 'wb') as f:
+        pickle.dump(text2graph, f, protocol=pickle.HIGHEST_PROTOCOL)
 
     return text2graph
 
 # Read raw instances
-def read_biorelex_texts(file_path):
-    raw_insts = []
-    with open(file_path, 'r', encoding='utf-8') as f:
-        raw_insts += json.load(f)
-
-    # Construct data_insts
+def read_texts(file_path, mode='biorelex'):
     texts = []
-    for inst in raw_insts:
-        texts.append(inst['text'])
+    if mode == 'biorelex':
+        raw_insts = []
+        with open(file_path, 'r', encoding='utf-8') as f:
+            raw_insts += json.load(f)
+        # Construct data_insts
+        for inst in raw_insts:
+            texts.append(inst['text']) 
+        return texts
+
+    if mode == 'ade':
+        with open(file_path, 'r') as f:
+            data = json.loads(f.read())
+        for raw_inst in data:
+            tokens = raw_inst['tokens']
+            texts.append(' '.join(tokens))
+        return texts
     
-    return texts
-        
 def print_graph_ex(text2graph, text):
     g_info = text2graph[text]
     nodes, edges = list(set(g_info['nodes'])), list(set(g_info['edges'])) # Nodes is a list of CUID
@@ -144,56 +152,84 @@ def print_graph_ex(text2graph, text):
     for n1, edge_type, n2 in edges:
         print(n1, n2, edge_type)
 
+def get_important_files(texts):
+    # Load relation dict (relation.pickle)
+    with open('resources/relation.pickle', 'rb') as f:
+        relation_dict = pickle.load(f)
+    # General initial text2graph
+    get_multiple_texts(texts, relation_dict)
+    # Print one example
+    with open('resources/text2graph.pkl', 'rb') as f:
+        text2graph=pickle.load(f)
+    print_graph_ex(text2graph, texts[1])
+    print('Done text2graph without embedding')
+    # Generate relevant embedding
+    with open('resources/text2graph.pkl', 'rb') as f:
+        text2graph=pickle.load(f)
+    generate_embedding_pickle(text2graph)
+    print('Done generating relevant embedding')
+    # Generate final text2graph
+    with open(UMLS_EMBS, 'rb') as f:
+        embeddings = pickle.load(f)
+    with open('resources/relation.pickle', 'rb') as f:
+        relation_dict = pickle.load(f) # Load relation dict (relation.pickle)
+    get_multiple_texts(texts, relation_dict, embeddings)
+    print('Done text2graph with embedding')
+    # Test if umls_extract_network works well
+    with open('resources/text2graph.pkl', 'rb') as f:
+        text2graph=pickle.load(f)
+        for text in texts:
+            umls_extract_network(text)
+
+def get_texts(text_mode, max_train=0, max_dev=0):
+    # Set paths to data
+    if text_mode == 'biorelex':
+        train_path, dev_path = 'resources/biorelex/train.json', 'resources/biorelex/dev.json'
+    if text_mode == 'ade':
+        train_path, dev_path = 'resources/ade/ade_split_0_test.json', 'resources/ade/ade_split_0_train.json'
+    # Get texts
+    train_texts = read_texts(train_path, text_mode) 
+    if max_train != 0:
+        random.Random(SEED).shuffle(train_texts)
+        train_texts = train_texts[:max_train]
+    dev_texts = read_texts(dev_path, text_mode)
+    if max_dev != 0:
+        random.Random(SEED).shuffle(dev_texts)
+        dev_texts = dev_texts[:max_dev]
+    print('Text read.')
+    return train_texts + dev_texts
+
+def word_to_cui(w):
+    sents = [w]
+    search_result, _ = umls_search_concepts(sents)
+    concepts = search_result[0]['concepts']
+    return concepts[0]['cui']
+    
+def adjust_common_embeddings():
+    # Open uuid common embedding file
+    with open(COMMON_EMBS_FILE_UUID, 'rb') as f:
+        uuid_common_embs = pickle.load(f)
+    # Go over this file and change word keys to cuid keys
+    common_embs = {}
+    for w, emb_vec in uuid_common_embs.items():
+        common_embs[word_to_cui(w)] = emb_vec
+    # Save final dictionary to the common embedding file
+    with open(COMMON_EMBS_FILE, 'wb') as f:
+        pickle.dump(common_embs, f, protocol=pickle.HIGHEST_PROTOCOL)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Generating files')
     parser.add_argument('--text_mode', type=str, default='None', help='Which source to read text from')
     parser.add_argument('--gen_rel', type=bool, default=False, help='Whether to generate relation.pickle')
-    parser.add_argument('--t2g', type=bool, default=False, help='Update text2graph without embedding')
-    parser.add_argument('--gen_embed', type=bool, default=False, help='Get only relevant mal embeddings')
-    parser.add_argument('--t2g_embed', type=bool, default=False, help='Update text2graph with embedding')
+    parser.add_argument('--gen_files', type=bool, default=False, help='Whether to generate important files')
+    parser.add_argument('--max_train', type=int, default=0, help='Maximum training examples allowed')
+    parser.add_argument('--max_dev', type=int, default=0, help='Maximum training examples allowed')
     args = parser.parse_args()
-    # Get texts
-    texts = []
-    if args.text_mode == 'biorelex':
-        train_path, dev_path = 'resources/biorelex/train.json', 'resources/biorelex/dev.json'
-        texts = read_biorelex_texts(train_path) + read_biorelex_texts(dev_path)
-        print('Text read.')
     # Generate relation dictionary
     if args.gen_rel:
         generate_relation_dict() 
-
-    ## Update text2graph.pkl without embedding
-    if args.t2g and len(texts) != 0:
-        # Load relation dict (relation.pickle)
-        with open('resources/relation.pickle', 'rb') as r_f:
-            relation_dict = pickle.load(r_f)
-        get_multiple_texts(texts, relation_dict)
-        # Print one example
-        with open('resources/text2graph.pkl', 'rb') as r_f:
-            text2graph=pickle.load(r_f)
-        print_graph_ex(text2graph, texts[1])
-
-    if args.gen_embed:
-        with open('resources/text2graph.pkl', 'rb') as r_f:
-            text2graph=pickle.load(r_f)
-        # Generate embedding files
-        generate_embedding_pickle(text2graph)
-    
-    if args.t2g_embed and len(texts) != 0:
-        with open(UMLS_EMBS, 'rb') as r_f:
-            embeddings = pickle.load(r_f)
-        # Load relation dict (relation.pickle)
-        with open('resources/relation.pickle', 'rb') as r_f:
-            relation_dict = pickle.load(r_f)
-        get_multiple_texts(texts, relation_dict, embeddings)
-        # Print one example
-        with open('resources/text2graph.pkl', 'rb') as r_f:
-            text2graph=pickle.load(r_f)
-        print_graph_ex(text2graph, texts[1])
-
-    with open('resources/text2graph.pkl', 'rb') as r_f:
-        text2graph=pickle.load(r_f)
-        cnt = 0
-        for text in texts:
-            G, nodes = umls_extract_network(text)
+    # Generate important files: text2graph and umls_embs
+    if args.gen_files:
+        # Read texts
+        texts = get_texts(args.text_mode, args.max_train, args.max_dev)
+        get_important_files(texts)

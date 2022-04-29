@@ -1,5 +1,6 @@
 import os
 import json
+import random
 
 from constants import *
 from os.path import join
@@ -79,7 +80,7 @@ def read_split(file_path, type_info, tokenizer):
 
     return data_insts
 
-def load_ade_dataset(base_path, tokenizer, split_nb):
+def load_ade_dataset(base_path, tokenizer, split_nb, max_train=0, max_dev=0):
     # Determine absolute file paths
     assert(split_nb in list(range(10)))
     train_fp = join(base_path, 'ade_split_{}_train.json'.format(split_nb))
@@ -93,5 +94,12 @@ def load_ade_dataset(base_path, tokenizer, split_nb):
     # Read splits
     train = read_split(train_fp, type_info, tokenizer)
     dev = read_split(test_fp, type_info, tokenizer)
+
+    if max_train != 0:
+        random.Random(SEED).shuffle(train)
+        train = train[:max_train]
+    if max_dev != 0:
+        random.Random(SEED).shuffle(dev)
+        dev = dev[:max_dev]
 
     return train, dev

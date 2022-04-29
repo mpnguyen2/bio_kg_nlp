@@ -28,7 +28,7 @@ def compute_average_semtype_emb():
         ctx += 1
     return rs / ctx
 
-def prepare_configs(config_name, dataset, split_nb, verbose=True):
+def prepare_configs(config_name, dataset, split_nb, verbose=True, max_train=0, max_dev=0):
     # Extract the requested config
     if verbose: print('Config {}'.format(config_name), flush=True)
     configs = pyhocon.ConfigFactory.parse_file(BASIC_CONF_PATH)[config_name]
@@ -49,6 +49,10 @@ def prepare_configs(config_name, dataset, split_nb, verbose=True):
     # save_dir
     configs['save_dir'] = join(BASE_SAVE_PATH, '{}_{}'.format(configs['dataset'], config_name))
     create_dir_if_not_exist(configs['save_dir'])
+
+    # Maximum number of train and dev allowed
+    configs['max_train'] = max_train
+    configs['max_dev'] = max_dev
 
     return configs
 
