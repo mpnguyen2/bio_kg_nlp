@@ -148,9 +148,9 @@ class FileGenerator:
         print('Done text2graph with embedding')
         self.save_text2graph()
         
-    def sanity_check(self, texts):
+    def sanity_check(self, texts, common_embs):
         for text in texts:
-            umls_extract_network(text)
+            umls_extract_network(text, common_embs)
     
 #### Text reader ####
 class TextReader:
@@ -219,6 +219,10 @@ if __name__ == '__main__':
         texts = text_reader.get_texts()
         # Generate files
         file_generator = FileGenerator()
+        with open(COMMON_EMBS_FILE, 'rb') as f:
+            common_embs = pickle.load(f)
+        #common_embs = {}
         #file_generator.generate_files(texts)
         # Sanity check
-        file_generator.sanity_check(texts)
+        print('WIKI EMBED: ', len(common_embs))
+        file_generator.sanity_check(texts, common_embs)

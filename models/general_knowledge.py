@@ -183,8 +183,8 @@ class KnowledgeEnhancerModule(nn.Module):
         ekg_graph, nodes = umls_extract_network(text, self.common_embs)
         ekg_concepts = umls_search_concepts([text])[0][0]['concepts']
         ekg_graph = ekg_graph.to(self.device)
-        initial_node_embs = [self.common_linear(torch.tensor(self.common_embs[n]).unsqueeze().to(self.device)) if n in self.common_embs
-            else torch.tensor(np.array(self.cuid2embs[n], dtype=np.float), dtype=torch.float).unsqueeze().to(self.device) for n in nodes]
+        initial_node_embs = [self.common_linear(torch.tensor(self.common_embs[n]).unsqueeze(0).to(self.device)).unsqueeze(0) if n in self.common_embs
+            else torch.tensor(np.array(self.cuid2embs[n], dtype=np.float), dtype=torch.float).unsqueeze(0).to(self.device) for n in nodes]
         initial_node_embs = torch.cat(initial_node_embs)
         ekg_in_h = {NODE: initial_node_embs}
         ekg_out_h = self.ekg_gnn_model(ekg_graph, ekg_in_h)[NODE]

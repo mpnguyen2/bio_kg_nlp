@@ -77,8 +77,10 @@ def umls_extract_network(sent, common_embs={}):
 
     # Process edges
     edgetype2tensor1, edgetype2tensor2, edge_types = {}, {}, set()
+    num_edges = len(edges); cnt = 0
     for n1, edge_type, n2 in edges:
-        if n1 in common_embs and n2 in common_embs:
+        if n1 in common_embs and n2 in common_embs and cnt < int(2*num_edges/3):
+            cnt += 1
             continue
         node1_index = nodes.index(n1)
         node2_index = nodes.index(n2)
@@ -93,6 +95,23 @@ def umls_extract_network(sent, common_embs={}):
 
     # Finalize the graph
     G = dgl.heterograph(graph_data)
+    if G.number_of_nodes() != len(nodes):
+        # Usual graph
+        for n1, edge_type, n2 in edges:
+            node1_index = nodes.index(n1)
+            node2_index = nodes.index(n2)
+            if not edge_type in edgetype2tensor1: edgetype2tensor1[edge_type] = []
+            if not edge_type in edgetype2tensor2: edgetype2tensor2[edge_type] = []
+            edgetype2tensor1[edge_type].append(node1_index)
+            edgetype2tensor2[edge_type].append(node2_index)
+            edge_types.add(edge_type)
+        for edge_type in edge_types:
+            graph_data[(NODE, edge_type, NODE)] = (torch.tensor(edgetype2tensor1[edge_type]),
+                                                torch.tensor(edgetype2tensor2[edge_type]))
+        G = dgl.heterograph(graph_data)
+    
+    assert(len(nodes) != 0)
+    assert(len(graph_data) != 0)
     assert(G.number_of_nodes() == len(nodes))
 
     return G, nodes
