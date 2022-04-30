@@ -10,56 +10,24 @@ import argparse
 
 from transformers import *
 from constants import *
-from external_knowledge.umls import umls_search_concepts, umls_extract_network
+from external_knowledge.umls import TEXT2GRAPH, umls_search_concepts, umls_extract_network
 from data.biorelex import load_biorelex_dataset
 
-# All file names
-SRDEF = 'resources/SRDEF'
-SRSTRE2 = 'resources/SRSTRE2'
-
-def generate_embedding_pickle(text2graph, file_path='resources/embeddings.csv'):
-    # Done reading dictionary from csv by chunk
-    print('Loading csv dict...')
-    chunksize=int(1e4); orig_dict = {}
-    with pd.read_csv(file_path, chunksize=chunksize, header=None) as reader:
-        for chunk in tqdm.tqdm(reader):
-            rows = chunk.values
-            for row in rows:
-                orig_dict[str(row[0])] = np.array(row[1:], dtype=np.double)
-    print('Done loading csv. Saving important info...')
-    # Saving only important embedding
-    new_dict = {}
-    cnt = 0
-    for g_info in tqdm.tqdm(text2graph.values()):
-        if not type(g_info) is dict:
-            continue
-        nodes = list(set(g_info['nodes']))
-        for n in nodes:
-            if n in orig_dict:
-                new_dict[n] = orig_dict[n]
-            else:
-                cnt += 1
-    print(f'Cannot find {cnt} entities embedding')
-    with open(UMLS_EMBS, 'wb') as handle:
-        pickle.dump(new_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
-    handle.close()
-    print('Done saving info')
-    
+#### Generating relation files ####
 def find_until_meet(pattern, s, n):
     ind = s.find(pattern); n -= 1
     while n > 0:
         ind = s.find(pattern, ind+1)
         n -= 1
     return s[ind+1:]
-
 # Generate UMLS_RELTYPES_FILE (UMLS_SEMTYPES_FILE not needed)
-def generate_txt():
+def generate_umls_reltypes():
     with open(SRDEF, 'r') as f:
         with open(UMLS_RELTYPES_FILE, 'w') as rel_file:
             for line in f:
                 if(line.startswith("RL")):
                     rel_file.write(find_until_meet('|', line, 7))
-
+# Generate RELATION_FILE
 def generate_relation_dict():
     abbrev = {}
     with open(SRDEF, 'r') as f:
@@ -67,14 +35,16 @@ def generate_relation_dict():
             fields = line.split("|")
             abbrev[fields[2]] = fields[8]
     d = {}
-    with open('resources/SRSTRE2', 'r') as f:
+    with open(SRSTRE2, 'r') as f:
         for line in f:
             fields = line.split("|")
             d[(abbrev[fields[0]], abbrev[fields[2]])] = abbrev[fields[1]]
     
-    with open('resources/relation.pickle', 'wb') as f:
+    with open(RELATION_FILE, 'wb') as f:
         pickle.dump(d, f, protocol=pickle.HIGHEST_PROTOCOL)
 
+#### Generating necessary text2graph and embedding files ####
+# Helper functions
 def get(text, text2graph, relation_dict, embeddings=None):
     if text in text2graph:
         return
@@ -83,14 +53,6 @@ def get(text, text2graph, relation_dict, embeddings=None):
     search_result, _ = umls_search_concepts(sents)
     search_result = search_result[0]
     concepts = search_result['concepts']
-    # Add all cuis of concepts to nodes list
-    nodes = []
-    '''
-    for concept in concepts:
-        #print(concept)
-        if embeddings is None or concept['cui'] in embeddings:
-            nodes.append(concept['cui'])
-    '''
     # Edge list include cuis of two concepts, and the (abbreviated) relation that joins them
     edges = []; nodes_set = set()
     for concept_start in concepts:
@@ -106,44 +68,17 @@ def get(text, text2graph, relation_dict, embeddings=None):
                         nodes_set.add(concept_end['cui'])
     # Node list from edge list:
     nodes = list(nodes_set)
-
     # Store final info that include nodes and edges
     text2graph[text] = {'nodes': nodes, 'edges': edges}
     
 def get_multiple_texts(texts, relation_dict, embeddings=None):
-    # Load relation dictionary
-    with open('resources/relation.pickle', 'rb') as f:
-        relation_dict = pickle.load(f)
     text2graph = {}
     # get each text in array of texts if not saved before
     for text in tqdm.tqdm(texts):
         get(text, text2graph, relation_dict, embeddings)
-    # Save dictionary to text2graph.pkl
-    with open('resources/text2graph.pkl', 'wb') as f:
-        pickle.dump(text2graph, f, protocol=pickle.HIGHEST_PROTOCOL)
-
     return text2graph
 
-# Read raw instances
-def read_texts(file_path, mode='biorelex'):
-    texts = []
-    if mode == 'biorelex':
-        raw_insts = []
-        with open(file_path, 'r', encoding='utf-8') as f:
-            raw_insts += json.load(f)
-        # Construct data_insts
-        for inst in raw_insts:
-            texts.append(inst['text']) 
-        return texts
-
-    if mode == 'ade':
-        with open(file_path, 'r') as f:
-            data = json.loads(f.read())
-        for raw_inst in data:
-            tokens = raw_inst['tokens']
-            texts.append(' '.join(tokens))
-        return texts
-    
+# Print example of graph
 def print_graph_ex(text2graph, text):
     g_info = text2graph[text]
     nodes, edges = list(set(g_info['nodes'])), list(set(g_info['edges'])) # Nodes is a list of CUID
@@ -152,70 +87,118 @@ def print_graph_ex(text2graph, text):
     for n1, edge_type, n2 in edges:
         print(n1, n2, edge_type)
 
-def get_important_files(texts):
-    # Load relation dict (relation.pickle)
-    with open('resources/relation.pickle', 'rb') as f:
-        relation_dict = pickle.load(f)
-    # General initial text2graph
-    get_multiple_texts(texts, relation_dict)
-    # Print one example
-    with open('resources/text2graph.pkl', 'rb') as f:
-        text2graph=pickle.load(f)
-    print_graph_ex(text2graph, texts[1])
-    print('Done text2graph without embedding')
-    # Generate relevant embedding
-    with open('resources/text2graph.pkl', 'rb') as f:
-        text2graph=pickle.load(f)
-    generate_embedding_pickle(text2graph)
-    print('Done generating relevant embedding')
-    # Generate final text2graph
-    with open(UMLS_EMBS, 'rb') as f:
-        embeddings = pickle.load(f)
-    with open('resources/relation.pickle', 'rb') as f:
-        relation_dict = pickle.load(f) # Load relation dict (relation.pickle)
-    get_multiple_texts(texts, relation_dict, embeddings)
-    print('Done text2graph with embedding')
-    # Test if umls_extract_network works well
-    with open('resources/text2graph.pkl', 'rb') as f:
-        text2graph=pickle.load(f)
+class FileGenerator:
+    def __init__(self):
+        # Map a pair of entity (abbreviated) types to a (abbreviated) relation
+        self.relation_dict = {}
+        # Map a CUID to corresponding Maldonado et al. embedding
+        self.embed_dict = {}
+        # Map text to a pair of dgl graph and nodes
+        self.text2graph = {}
+    
+    def load_relation_dict(self):
+        with open(RELATION_FILE, 'rb') as f:
+            self.relation_dict = pickle.load(f)
+
+    def generate_embedding(self, text2graph):
+        # Done reading dictionary from csv by chunk
+        print('Loading csv dict...')
+        chunksize=int(1e4); orig_dict = {}
+        with pd.read_csv(EMBED_DATABASE, chunksize=chunksize, header=None) as reader:
+            for chunk in tqdm.tqdm(reader):
+                rows = chunk.values
+                for row in rows:
+                    orig_dict[str(row[0])] = np.array(row[1:], dtype=np.double)
+        print('Done loading csv. Saving important info...')
+        # Saving only important embedding
+        cnt = 0
+        for g_info in tqdm.tqdm(text2graph.values()):
+            if not type(g_info) is dict:
+                continue
+            nodes = list(set(g_info['nodes']))
+            for n in nodes:
+                if n in orig_dict:
+                    self.embed_dict[n] = orig_dict[n]
+                else:
+                    cnt += 1
+        print(f'Cannot find {cnt} entities embedding')
+    
+    def save_embedding(self):
+        with open(UMLS_EMBS, 'wb') as f:
+            pickle.dump(self.embed_dict, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+    def save_text2graph(self):
+        with open(UMLS_TEXT2GRAPH_FILE, 'wb') as f:
+            pickle.dump(self.text2graph, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+    def generate_files(self, texts):
+         # Load relation dict (relation.pickle)
+        self.load_relation_dict()
+        # General initial text2graph
+        print('Loaded relation dict. Generate text2graph without embedding...')
+        self.text2graph = get_multiple_texts(texts, self.relation_dict)
+        self.save_text2graph()
+        print('Done text2graph without embedding. Generate relevant embedding...')
+        # Generate relevant embedding
+        self.generate_embedding(self.text2graph)
+        self.save_embedding()
+        print('Done generating relevant embedding. Generate text2graph with embedding...')
+        # Generate final text2graph
+        self.text2graph = get_multiple_texts(texts, self.relation_dict, self.embed_dict)
+        print('Done text2graph with embedding')
+        self.save_text2graph()
+        
+    def sanity_check(self, texts):
         for text in texts:
             umls_extract_network(text)
-
-def get_texts(text_mode, max_train=0, max_dev=0):
-    # Set paths to data
-    if text_mode == 'biorelex':
-        train_path, dev_path = 'resources/biorelex/train.json', 'resources/biorelex/dev.json'
-    if text_mode == 'ade':
-        train_path, dev_path = 'resources/ade/ade_split_0_test.json', 'resources/ade/ade_split_0_train.json'
-    # Get texts
-    train_texts = read_texts(train_path, text_mode) 
-    if max_train != 0:
-        random.Random(SEED).shuffle(train_texts)
-        train_texts = train_texts[:max_train]
-    dev_texts = read_texts(dev_path, text_mode)
-    if max_dev != 0:
-        random.Random(SEED).shuffle(dev_texts)
-        dev_texts = dev_texts[:max_dev]
-    print('Text read.')
-    return train_texts + dev_texts
-
-def word_to_cui(w):
-    sents = [w]
-    search_result, _ = umls_search_concepts(sents)
-    concepts = search_result[0]['concepts']
-    return concepts[0]['cui']
     
-def adjust_common_embeddings():
-    # Open uuid common embedding file
-    with open(COMMON_EMBS_FILE_UUID, 'rb') as f:
-        uuid_common_embs = pickle.load(f)
-    # Go over this file and change word keys to cuid keys
-    common_embs = {}
-    for w, emb_vec in uuid_common_embs.items():
-        common_embs[word_to_cui(w)] = emb_vec
-    # Save final dictionary to the common embedding file
-    with open(COMMON_EMBS_FILE, 'wb') as f:
-        pickle.dump(common_embs, f, protocol=pickle.HIGHEST_PROTOCOL)
+#### Text reader ####
+class TextReader:
+    def __init__(self, mode='biorelex', max_train=0, max_dev=0):
+        self.mode = mode
+        self.max_train = max_train
+        self.max_dev = max_dev
+        # paths to data
+        if self.mode == 'biorelex':
+            self.train_path = 'resources/biorelex/train.json'
+            self.dev_path  = 'resources/biorelex/dev.json'
+        if self.mode == 'ade':
+            self.train_path = 'resources/ade/ade_split_0_train.json'
+            self.dev_path = 'resources/ade/ade_split_0_test.json'
+
+    def read_texts(self, file_path):
+        texts = []
+        if self.mode == 'biorelex':
+            raw_insts = []
+            with open(file_path, 'r', encoding='utf-8') as f:
+                raw_insts += json.load(f)
+            # Construct data_insts
+            for inst in raw_insts:
+                texts.append(inst['text']) 
+            return texts
+
+        if self.mode == 'ade':
+            with open(file_path, 'r') as f:
+                data = json.loads(f.read())
+            for raw_inst in data:
+                tokens = raw_inst['tokens']
+                texts.append(' '.join(tokens))
+            return texts
+   
+    def get_texts(self):
+        print('Reading text...')
+        # Get train text
+        train_texts = self.read_texts(self.train_path) 
+        if self.max_train != 0:
+            random.Random(SEED).shuffle(train_texts)
+            train_texts = train_texts[:self.max_train]
+        # Get dev texts
+        dev_texts = self.read_texts(self.dev_path)
+        if self.max_dev != 0:
+            random.Random(SEED).shuffle(dev_texts)
+            dev_texts = dev_texts[:self.max_dev]
+        print('Text read.')
+        return train_texts + dev_texts
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Generating files')
@@ -227,9 +210,15 @@ if __name__ == '__main__':
     args = parser.parse_args()
     # Generate relation dictionary
     if args.gen_rel:
-        generate_relation_dict() 
+        generate_umls_reltypes()
+        generate_relation_dict()
     # Generate important files: text2graph and umls_embs
     if args.gen_files:
         # Read texts
-        texts = get_texts(args.text_mode, args.max_train, args.max_dev)
-        get_important_files(texts)
+        text_reader = TextReader(args.text_mode, args.max_train, args.max_dev)
+        texts = text_reader.get_texts()
+        # Generate files
+        file_generator = FileGenerator()
+        #file_generator.generate_files(texts)
+        # Sanity check
+        file_generator.sanity_check(texts)

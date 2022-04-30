@@ -7,11 +7,11 @@ do
 done
 if [ $gen_file == "T" ]; then
     echo "Generating files"
-    python generate_files.py --text_mode ade --gen_files True --max_train 8 --max_dev 1;
+    python generate_files.py --text_mode ade --gen_files True --max_train 70 --max_dev 10;
 else
     echo "Not generating anything"
 fi
 if [ $run_model == "T" ]; then
     echo "Training model"
-    python trainer.py -d ade -c with_external_knowledge  --max_train 8 --max_dev 1
+    python trainer.py -d ade -c with_external_knowledge  --max_train 7 --max_dev 1
 fi

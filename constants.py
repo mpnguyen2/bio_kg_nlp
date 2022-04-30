@@ -93,7 +93,17 @@ ADE_FILTER_WORDSET_2 = ['and', 'this', 'that', 'the', 'in', 'of', 'with', 'from'
 
 NODE = 'node'
 
+# UMLS raw resources
+SRDEF = 'resources/SRDEF'
+SRSTRE2 = 'resources/SRSTRE2'
+
+# Additional file paths for generating necessary data
+EMBED_DATABASE = 'resources/embeddings.csv'
+RELATION_FILE = 'resources/relation.pkl'
+
+# Seed for reducing train/dev # of samples
+SEED = 12
+
+# common (general knowledge) embeddings (of common terms)
 COMMON_EMBS_FILE_UUID = 'resources/common_embs_file_uuid.pkl'
 COMMON_EMBS_FILE = 'resources/common_embs_file.pkl'
-
-SEED = 12

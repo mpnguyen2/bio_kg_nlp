@@ -102,5 +102,5 @@ if __name__ == "__main__":
     args.split_nb = int(args.split_nb)
 
     # Start training
-    configs = prepare_configs(args.config_name, args.dataset, args.split_nb, args.max_train, args.max_dev)
+    configs = prepare_configs(args.config_name, args.dataset, args.split_nb, True, args.max_train, args.max_dev)
     train(configs)

@@ -95,6 +95,7 @@ def load_ade_dataset(base_path, tokenizer, split_nb, max_train=0, max_dev=0):
     train = read_split(train_fp, type_info, tokenizer)
     dev = read_split(test_fp, type_info, tokenizer)
 
+    max_train, max_dev = int(max_train), int(max_dev)
     if max_train != 0:
         random.Random(SEED).shuffle(train)
         train = train[:max_train]
