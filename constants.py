@@ -105,5 +105,4 @@ RELATION_FILE = 'resources/relation.pkl'
 SEED = 12
 
 # common (general knowledge) embeddings (of common terms)
-COMMON_EMBS_FILE_UUID = 'resources/common_embs_file_uuid.pkl'
-COMMON_EMBS_FILE = 'resources/common_embs_file.pkl'
+COMMON_EMBS_FILE = 'resources/umls_common_embs.pkl'#'resources/UMLS_test.pkl'#

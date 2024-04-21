@@ -219,10 +219,10 @@ if __name__ == '__main__':
         texts = text_reader.get_texts()
         # Generate files
         file_generator = FileGenerator()
-        with open(COMMON_EMBS_FILE, 'rb') as f:
-            common_embs = pickle.load(f)
-        #common_embs = {}
         #file_generator.generate_files(texts)
         # Sanity check
-        print('WIKI EMBED: ', len(common_embs))
+        with open(COMMON_EMBS_FILE, 'rb') as f:
+            common_embs = pickle.load(f)
+        common_embs = {}
+        #print('WIKI EMBED: ', len(common_embs))
         file_generator.sanity_check(texts, common_embs)
